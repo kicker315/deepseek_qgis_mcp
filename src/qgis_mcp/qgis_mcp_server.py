@@ -9,6 +9,7 @@ import socket
 import json
 from typing import AsyncIterator, Dict, Any
 from mcp.server.fastmcp import FastMCP, Context
+from .ollama_client import OllamaClient  # 导入新的Ollama客户端
 
 logging.basicConfig(level=logging.INFO, 
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -106,6 +107,19 @@ def get_qgis_connection():
         logger.info("Created new persistent connection to Qgis")
     
     return _qgis_connection
+
+# 添加全局Ollama客户端
+_ollama_client = None
+
+def get_ollama_client():
+    """获取或创建Ollama客户端实例"""
+    global _ollama_client
+    
+    if _ollama_client is None:
+        _ollama_client = OllamaClient(model="deepseek-r1:14b")
+        logger.info("Created new Ollama client")
+    
+    return _ollama_client
 
 @asynccontextmanager
 async def server_lifespan(server: FastMCP) -> AsyncIterator[Dict[str, Any]]:
@@ -260,6 +274,51 @@ def execute_code(ctx: Context, code: str) -> str:
     result = qgis.send_command("execute_code", {"code": code})
     return json.dumps(result, indent=2)
 
+
+
+def main():
+    """Run the MCP server"""
+    mcp.run()
+
+@mcp.tool()
+def process_with_ollama(ctx: Context, qgis_data: str, system_prompt: str = None) -> str:
+    """使用Ollama处理QGIS数据并获取AI响应
+    
+    Args:
+        qgis_data: QGIS数据（通常是JSON格式的字符串）
+        system_prompt: 可选的系统提示
+        
+    Returns:
+        Ollama生成的响应
+    """
+    ollama = get_ollama_client()
+    result = ollama.process_qgis_command(qgis_data, system_prompt)
+    return result
+
+@mcp.tool()
+def execute_with_ai(ctx: Context, algorithm: str, parameters: dict) -> str:
+    """使用AI辅助执行处理算法
+    
+    首先使用Ollama分析参数，然后执行QGIS处理算法
+    """
+    ollama = get_ollama_client()
+    
+    # 让AI分析参数
+    params_str = json.dumps(parameters, indent=2)
+    prompt = f"分析以下QGIS处理算法'{algorithm}'的参数，并提供优化建议：\n\n{params_str}"
+    ai_analysis = ollama.generate(prompt)
+    
+    # 执行原始处理算法
+    qgis = get_qgis_connection()
+    result = qgis.send_command("execute_processing", {"algorithm": algorithm, "parameters": parameters})
+    
+    # 组合AI分析和执行结果
+    combined_result = {
+        "ai_analysis": ai_analysis,
+        "execution_result": result
+    }
+    
+    return json.dumps(combined_result, indent=2)
 
 
 def main():

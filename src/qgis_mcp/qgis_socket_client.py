@@ -154,6 +154,39 @@ def print_json(data):
     """Imprime datos JSON formateados"""
     print(json.dumps(data, indent=2))
 
+class QgisMCPClient:
+    def process_with_ollama(self, qgis_data, system_prompt=None):
+        """使用Ollama处理QGIS数据
+        
+        Args:
+            qgis_data: 要处理的QGIS数据
+            system_prompt: 可选的系统提示
+            
+        Returns:
+            Ollama的处理结果
+        """
+        params = {"qgis_data": qgis_data}
+        if system_prompt:
+            params["system_prompt"] = system_prompt
+            
+        return self.send_command("process_with_ollama", params)
+    
+    def execute_with_ai(self, algorithm, parameters):
+        """使用AI辅助执行处理算法
+        
+        Args:
+            algorithm: 要执行的算法名称
+            parameters: 算法参数
+            
+        Returns:
+            执行结果和AI分析
+        """
+        return self.send_command("execute_with_ai", {
+            "algorithm": algorithm,
+            "parameters": parameters
+        })
+
+
 def main():
     # Conectar al servidor QGIS MCP
     client = QgisMCPClient(host='localhost', port=9876)
@@ -196,6 +229,27 @@ def main():
         print("\nRendering image")
         render_map = client.render_map("C:/Users/jjsan/OneDrive/Consultoria/Finalizados/electoral_maps/thailand_2007/map.png")
         print_json(render_map)
+        
+        # 添加Ollama处理示例
+        print("\n使用Ollama处理QGIS数据:")
+        project_info_str = json.dumps(project_info, indent=2)
+        ollama_result = client.process_with_ollama(project_info_str)
+        print_json(ollama_result)
+        
+        # 使用AI辅助执行处理算法示例
+        print("\n使用AI辅助执行缓冲区分析:")
+        buffer_params = {
+            "INPUT": first_layer,
+            "DISTANCE": 0.01,
+            "SEGMENTS": 5,
+            "END_CAP_STYLE": 0,
+            "JOIN_STYLE": 0,
+            "MITER_LIMIT": 2,
+            "DISSOLVE": False,
+            "OUTPUT": "memory:"
+        }
+        ai_result = client.execute_with_ai("native:buffer", buffer_params)
+        print_json(ai_result)
         
     except Exception:
         print("Error ejecutando comandos")
